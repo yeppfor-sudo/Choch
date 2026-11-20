@@ -1,0 +1,49 @@
+name: CHoCH AI Scanner
+
+on:
+  schedule:
+    - cron: "7 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: choch-ai
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python choch_ai.py
+
+      - name: Upload charts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: charts
+          path: out/
+          retention-days: 3
+
+      - name: Commit learning state
+        run: |
+          git config user.name "choch-ai-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add state
+          git diff --cached --quiet || (git commit -m "state update [skip ci]" && git pull --rebase && git push)
